@@ -25,33 +25,49 @@ def linear(x, der):
 
 
 class MLP:
-
 	#Gera a MLP
 	def __init__(self, input_size, layers_sizes, actv_funcs=None):
-
 		#Define todas as funções de ativação como sendo a logistica caso não definidas
 		if not actv_funcs:
 			actv_funcs = [logistic for _ in range(len(layers_sizes))]
 
+		#Verificação da entrada
+		assert input_size > 0
+		assert all(layers_sizes > 0)
 		assert len(layers_sizes) == len(actv_funcs)
+
+		#Atribuição das funções de ativação
+		self.actv_funcs = actv_funcs
 
 		#Gera as camadas com pesos entre -1 e 1
 		self.layers = [np.random.random_sample((layers_sizes[0], input_size+1))*2.0 - 1]
 		self.layers += [np.random.random_sample((layers_sizes[i], layers_sizes[i-1]+1))*2.0 - 1 for i in range(1, len(layers_sizes))]
+
+		#Vetores auxiliares
+		self.last_input_vects = [np.ones((input_size+1, ))] + [np.ones((layer_size+1, )) for layer_size in layers_sizes]
+		self.last_nets = [np.empty((layer_size, )) for layer_size in layers_sizes]
+		self.last_ders = [np.zeros(layer.shape) for layer in layers]
+
+	#Faz o forward da MLP
+	def predict(x):
+		#Verificação da entrada
+	  	assert type(x) == np.ndarray
+	  	assert x.shape == (self.layers[0].shape[1]-1, )
+
+	  	#Executar o forward camada por camada
+	  	self.last_input_vects[0][:-1] = x
+	  	for i in range(len(self.layers)):
+	  		self.last_nets[i] = np.sum(self.last_input_vects[i] * self.layers[i], axis=1)
+	  		self.last_input_vects[i+1][:-1] = self.actv_funcs[i](self.last_nets[i])
+
+	  	#Retornar a saída da ultima camada
+	  	return self.last_input_vects[-1][:-1]
 		
 
 
 
 
 
-
-
-
-# Adiciona 1 aos vetores. Utilizado para adicionar o bias
-def append_one(x):
-	aux = np.ones(x.shape[0]+1)
-	aux[0:x.shape[0]] = x
-	return aux
 
 # Calcula a acuracia da MLP utilizando uma amostra de entrada e suas respectivas saidas esperadas.
 def get_acc(dataset_x, dataset_y, hidden_layer, out_layer):
@@ -62,22 +78,6 @@ def get_acc(dataset_x, dataset_y, hidden_layer, out_layer):
 			acc += 1
 
 	return acc/dataset_x.shape[0]
-
-"""### Geração da Rede
-
-A função abaixo cria as camadas da rede, que são basicamente vetores que armazenam os pesos de cada neurônio. Nesse exercício, foi usada apenas uma camada escondida (**hidden_layer**), além da camada de saída (**out_layer**). A função pode ser usada para geração de qualquer rede MLP, uma vez que os tamanhos da entrada, da camada escondida e da camada de saída são especificados como parâmetros.
-
-Os pesos são inicializados com valores aleatórios entre -0.1 e 0.1, conforme especificado no exercício.
-"""
-
-# Essa função gera duas camadas, uma de entrada e outra de sáida.
-def generate_mlp(input_size, hidden_size, out_size):
-	hidden_layer = np.random.random_sample((hidden_size, input_size+1))#generate value 0 to 1
-	out_layer = np.random.random_sample((out_size, hidden_size+1)) # generate value 0 to 1
-	# normalizado entre -0.1 e 0.1 para atender os requisitos do trabalho
-	hidden_layer = minmax_scale(hidden_layer, feature_range=(-0.1,0.1))
-	out_layer = minmax_scale(out_layer, feature_range=(-0.1,0.1))
-	return hidden_layer, out_layer
 
 """### Função de Ativação
 
@@ -122,74 +122,3 @@ def fit_mlp(dataset_x, dataset_y, hidden_layer, out_layer, thresh=0.01, eta=0.1,
 		#print("Current error:", error)
 
 	return hidden_layer, out_layer
-
-"""### Ativação da Rede
-
-A ativação da rede consiste em calcular uma saída a partir de uma entrada, utilizando os pesos calculados durante o treinamento.
-
-*A* função **feed_mlp** implementa este processo. O passo inicial é adicionar um *bias* à entrada (linha 4). Então é calculada a saída da camada escondida, conforme a fórmula abaixo:
-$$ F(o_1, ..., o_j) = g(\sum_{i} w_{ij} x_i )$$
-Na fórmula acima, g() é a função de ativação.
-
-Este processo é repetido para a camada de saída, utilizando como entrada a saída da camada escondida, calculada anteriormente.
-"""
-
-# essa função ativa a rede
-def feed_mlp(network_input, hidden_layer, out_layer):
-  
-	aux_network_input = append_one(network_input) # adicionas 1 na entrada para o bias
-	hidden_out = log(np.sum(aux_network_input * hidden_layer, axis=1)) # multiplica os pesos ou seja ativa  a rede 
-
-	aux_hidden_out = append_one(hidden_out)#adiciona 1 para o bias
-	network_out = log(np.sum(aux_hidden_out * out_layer, axis=1)) # calcula a ativação
-
-	return network_out, hidden_out
-
-"""### Criação dos Datasets e Execução dos Testes
-
-Para cada um dos problemas, XOR e mapeamento identidade, são executados os passos abaixo:
-* criação das amostras de teste e saídas esperadas;
-* criação da MLP, especificando o tamanho das camadas de acordo com o problema;
-* treinamento da MLP;
-* cálculo da acurácia, através da ativação da MLP para cada um dos itens da amostra de teste.
-
-A alteração do valor da taxa de aprendizagem (**eta**) pode impactar na acurácia da MLP para o caso do mapeamento identidade. No código abaixo, para cada problema, são executados treinamentos com taxas de aprendizagem 0.1 e 0.5, para demonstrar essa possível diferença.
-"""
-
-dataset_x = np.asarray([[0, 0], [0, 1], [1, 0], [1, 1]])
-dataset_y = np.asarray([[0], [1], [1], [0]])
-
-hidden_layer, out_layer = generate_mlp(2, 2, 1)
-hidden_layer, out_layer = fit_mlp(dataset_x, dataset_y, hidden_layer, out_layer, thresh=0.01, eta=0.1, max_it=1000)
-print("XOR Accuracy (eta = 0.1):", get_acc(dataset_x, dataset_y, hidden_layer, out_layer))
-
-hidden_layer, out_layer = generate_mlp(2, 2, 1)
-hidden_layer, out_layer = fit_mlp(dataset_x, dataset_y, hidden_layer, out_layer, thresh=0.01, eta=0.1, max_it=1000)
-print("XOR Accuracy (eta = 0.5):", get_acc(dataset_x, dataset_y, hidden_layer, out_layer))
-
-
-dataset_x = np.identity(8)
-dataset_y = dataset_x
-print(dataset_x)
-
-hidden_layer, out_layer = generate_mlp(8, 3, 8)
-hidden_layer, out_layer = fit_mlp(dataset_x, dataset_y, hidden_layer, out_layer, thresh=0.01, eta=0.1, max_it=1000)
-print("8-Dim Identity Accuracy (eta = 0.1):", get_acc(dataset_x, dataset_y, hidden_layer, out_layer))
-
-hidden_layer, out_layer = generate_mlp(8, 3, 8)
-hidden_layer, out_layer = fit_mlp(dataset_x, dataset_y, hidden_layer, out_layer, thresh=0.01, eta=0.5, max_it=1000)
-print("8-Dim Identity Accuracy (eta = 0.5):", get_acc(dataset_x, dataset_y, hidden_layer, out_layer))
-
-print()
-
-dataset_x = np.identity(15)
-dataset_y = dataset_x
-print(dataset_x)
-
-hidden_layer, out_layer = generate_mlp(15, 4, 15)
-hidden_layer, out_layer = fit_mlp(dataset_x, dataset_y, hidden_layer, out_layer, thresh=0.01, eta=0.1, max_it=1000)
-print("15-Dim Identity Accuracy (eta = 0.1):", get_acc(dataset_x, dataset_y, hidden_layer, out_layer))
-
-hidden_layer, out_layer = generate_mlp(15, 4, 15)
-hidden_layer, out_layer = fit_mlp(dataset_x, dataset_y, hidden_layer, out_layer, thresh=0.01, eta=0.5, max_it=1000)
-print("15-Dim Identity Accuracy (eta = 0.5):", get_acc(dataset_x, dataset_y, hidden_layer, out_layer))
