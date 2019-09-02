@@ -105,8 +105,24 @@ class MLP:
 		#Executa predict_single para cada sample, e retorna as saidas em uma matriz
 		return np.stack([self._predict_single(sample) for sample in x], axis=0)
 
+	#Calcula a loss média para todo o dataset de entrada
+	def _get_loss(self, pred, true):
+		return np.sum([self.loss_func(sample_pred, sample_true, False) for sample_pred, sample_true in zip(pred, true)]) / len(true)
+
+	#Calcula as métricas para todo o dataset de entrada
+	def _get_metrics(self, pred, true):
+		return [(metric[0], metric[1](pred, true)) for metric in self.metrics]
+
 	def evaluate(self, x, y):
-		pass
+		#Verificação da entrada
+		assert (type(x) == np.ndarray) and (type(y) == np.ndarray)
+		assert (len(x.shape) == 2) and (len(y.shape) == 2)
+		assert len(x) == len(y)
+
+		#Calculo das métricas e da loss
+		pred = self.predict(x)
+		return [("Loss", self._get_loss(pred, y))] + self._get_metrics(pred, y)
+
 
 	#Faz o backpropagation da MLP
 	def fit(self, x, y, epochs=1, loss_thresh=0.001, learning_rate=0.1, momentum=0.01, reset_momentum=False, return_history=False, verbose=False):
@@ -122,27 +138,17 @@ class MLP:
 		#Reseta o momentum armazenado se necessário
 		self.last_ders = [np.zeros(layer.shape) for layer in self.layers] if reset_momentum else self.last_ders
 
-		#Variáveis que armazenam saídas e histórico durante o loop
-		history = []
-		cur_dataset_out = np.empty(y.shape)
-
 		#Faz o loop do fit até o numero máximo de epochs ou até a loss ser menor que o threshold
 		cur_epoch = 0
 		cur_epoch_loss = loss_thresh+1
+		history = []
 		while(cur_epoch_loss > loss_thresh and cur_epoch < epochs):
-			#Variavel acumuladora da loss da epoch
-			cur_epoch_loss = 0
 			#Fitar sample a sample
-			for sample, ground_truth, sample_i in zip(x, y, range(len(x))):
-				#Calcular a saída e a loss da saída
-				cur_out = self._predict_single(sample)
-				cur_epoch_loss += self.loss_func(cur_out, ground_truth, False)
-				cur_dataset_out[sample_i] = cur_out
-
+			for sample, ground_truth in zip(x, y):
 				#------Derivar e propagar para todas as camada------
 				#---Derivação inicialmente da última camada, fora do loop por ser diferente das outras---
 				#A variável der_backprop armazena a derivada que esta sendo propagada para trás
-				der_backprop = self.loss_func(cur_out, ground_truth, True) * self.actv_funcs[-1](self.last_nets[-1], True)
+				der_backprop = self.loss_func(self._predict_single(sample), ground_truth, True) * self.actv_funcs[-1](self.last_nets[-1], True)
 				#Necessrio para multiplicar na linha de baixo, apenas altera o formato do array
 				der_backprop = np.expand_dims(der_backprop, axis=1)
 				#A variável cur_der armazena a derivada para os pesos da camada atual na iteração atual, antes do momentum
@@ -160,11 +166,12 @@ class MLP:
 				self.layers = [layer - last_der for layer, last_der in zip(self.layers, self.last_ders)]
 
 			#Pegar a loss média da epoch
-			cur_epoch_loss /= len(x)
+			cur_dataset_pred = self.predict(x)
+			cur_epoch_loss = self._get_loss(cur_dataset_pred, y)
 			#Calcular as métricas e salvar no histórico se necessário
 			if return_history or verbose:
 				#Calcular as métricas
-				cur_metrics = [("Loss", cur_epoch_loss)] + [(metric[0], metric[1](cur_dataset_out, y)) for metric in self.metrics]
+				cur_metrics = [("Loss", cur_epoch_loss)] + self._get_metrics(cur_dataset_pred, y)
 				
 				#Printar na tela se verboso
 				if verbose:
@@ -197,4 +204,7 @@ y = y[order]
 
 mlp = MLP(4, [20, 3])
 history = mlp.fit(x, y, 150, loss_thresh=0.0001, learning_rate=0.01, momentum=0.005, reset_momentum=True, return_history=True, verbose=True)
+print("\n\n")
 print(history)
+print("\n\n")
+print(mlp.evaluate(x, y))
