@@ -89,7 +89,7 @@ class MLP:
 			self.last_inputs[i+1][:-1] = self.actv_funcs[i](self.last_nets[i], False)
 
 		#Retorna a saida da ultima camada
-		return self.last_inputs[-1][:-1]
+		return np.copy(self.last_inputs[-1][:-1])
 
 	#Faz o forward da MLP para todo o dataset de entrada
 	def predict(self, x):
@@ -176,5 +176,5 @@ y = y[order]
 #print(y)
 #print(x.shape, y.shape)
 
-mlp = MLP(4, [20, 20, 3])
+mlp = MLP(4, [20, 3])
 mlp.fit(x, y, 200000, loss_thresh=0.0001, learning_rate=0.01, momentum=0.005)
