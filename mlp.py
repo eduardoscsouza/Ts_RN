@@ -105,9 +105,6 @@ class MLP:
 		#Executa predict_single para cada sample, e retorna as saidas em uma matriz
 		return np.stack([self._predict_single(sample) for sample in x], axis=0)
 
-	def _evaluate_no_loss(self):
-		pass
-
 	def evaluate(self, x, y):
 		pass
 
@@ -121,19 +118,26 @@ class MLP:
 		assert loss_thresh >= 0
 		assert learning_rate > 0
 		assert (momentum >= 0) and (momentum < 1)
+		
+		#Reseta o momentum armazenado se necessário
+		self.last_ders = [np.zeros(layer.shape) for layer in self.layers] if reset_momentum else self.last_ders
 
-		#Faz o loop do fit até o numero máximo de epochs
-		#ou até a loss ser menor que o threshold
+		#Variáveis que armazenam saídas e histórico durante o loop
+		history = []
+		cur_dataset_out = np.empty(y.shape)
+
+		#Faz o loop do fit até o numero máximo de epochs ou até a loss ser menor que o threshold
 		cur_epoch = 0
 		cur_epoch_loss = loss_thresh+1
 		while(cur_epoch_loss > loss_thresh and cur_epoch < epochs):
 			#Variavel acumuladora da loss da epoch
 			cur_epoch_loss = 0
 			#Fitar sample a sample
-			for sample, ground_truth in zip(x, y):
+			for sample, ground_truth, sample_i in zip(x, y, range(len(x))):
 				#Calcular a saída e a loss da saída
 				cur_out = self._predict_single(sample)
 				cur_epoch_loss += self.loss_func(cur_out, ground_truth, False)
+				cur_dataset_out[sample_i] = cur_out
 
 				#------Derivar e propagar para todas as camada------
 				#---Derivação inicialmente da última camada, fora do loop por ser diferente das outras---
@@ -157,9 +161,24 @@ class MLP:
 
 			#Pegar a loss média da epoch
 			cur_epoch_loss /= len(x)
-			cur_epoch += 1
-			print(cur_epoch_loss, accuracy(self.predict(x), y))
+			#Calcular as métricas e salvar no histórico se necessário
+			if return_history or verbose:
+				#Calcular as métricas
+				cur_metrics = [("Loss", cur_epoch_loss)] + [(metric[0], metric[1](cur_dataset_out, y)) for metric in self.metrics]
+				
+				#Printar na tela se verboso
+				if verbose:
+					print("----------------------------")
+					print("\tEPOCH {}".format(cur_epoch))
+					[print(metric[0], ": ", metric[1], sep='') for metric in cur_metrics]
 
+				#Salvar no histórico se necessário
+				history += cur_metrics if return_history else []
+
+			#Incrementar contador de epoch
+			cur_epoch += 1
+
+		return history if return_history else None
 
 
 from sklearn.datasets import load_iris
@@ -177,4 +196,5 @@ y = y[order]
 #print(x.shape, y.shape)
 
 mlp = MLP(4, [20, 3])
-mlp.fit(x, y, 200000, loss_thresh=0.0001, learning_rate=0.01, momentum=0.005)
+history = mlp.fit(x, y, 150, loss_thresh=0.0001, learning_rate=0.01, momentum=0.005, reset_momentum=True, return_history=True, verbose=True)
+print(history)
