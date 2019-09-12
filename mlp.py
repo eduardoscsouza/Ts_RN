@@ -1,10 +1,11 @@
 import numpy as np
+from scipy.special import expit
 
 
 
 #Função logistica, também conhecida como função sigmoidal
 def logistic(x, der=False):
-	return 1/(1 + np.exp(-x)) if not der else np.exp(x)/((1 + np.exp(x))**2)
+	return expit(x) if not der else expit(x) * (1-expit(x))
 
 #Função tangente hiperbolica
 def tanh(x, der=False):
@@ -24,13 +25,17 @@ def linear(x, der=False):
 
 
 
-#Função de Loss mean squared error
-def MSE(pred, true, der=False):
-	return np.sum(np.square(pred-true))/2 if not der else (pred-true)
+#Função de Loss de erro quadrático
+def squared_error(pred, true, der=False):
+	return np.sum(np.square(pred-true)) if not der else 2*(pred-true)
 
 
 
-# Calcula a acuracia dados a saida predita e a real
+#Calcula o erro quadrático médio entre a saida predita e a real
+def mean_squared_error(pred, true):
+  return np.sum(np.square(pred-true))/len(true)
+
+#Calcula a acuracia dados a saida predita e a real
 def accuracy(pred, true):		
 	return np.count_nonzero(np.argmax(pred, axis=1) == np.argmax(true, axis=1))/len(pred)
 
@@ -38,7 +43,7 @@ def accuracy(pred, true):
 
 class MLP:
 	#Gera a MLP
-	def __init__(self, input_size, layers_sizes, actv_funcs=None, loss_func=MSE, metrics=[("Accuracy", accuracy)]):
+	def __init__(self, input_size, layers_sizes, actv_funcs=None, loss_func=squared_error, metrics=[("Accuracy", accuracy)]):
 		#Define todas as funções de ativação como sendo a logistica caso não definidas
 		if not actv_funcs:
 			actv_funcs = [logistic for _ in range(len(layers_sizes))]
@@ -186,25 +191,3 @@ class MLP:
 			cur_epoch += 1
 
 		return history if return_history else None
-
-
-from sklearn.datasets import load_iris
-x, aux_y = (np.asarray(iris) for iris in load_iris(True))
-y = np.zeros((len(x), 3))
-for i in range(len(x)):
-	y[i, aux_y[i]] = 1
-
-order = np.random.choice(len(x), len(x), replace=False)
-x = x[order]
-y = y[order]
-
-#print(x)
-#print(y)
-#print(x.shape, y.shape)
-
-mlp = MLP(4, [20, 3])
-history = mlp.fit(x, y, 150, loss_thresh=0.0001, learning_rate=0.01, momentum=0.005, reset_momentum=True, return_history=True, verbose=True)
-print("\n\n")
-print(history)
-print("\n\n")
-print(mlp.evaluate(x, y))
